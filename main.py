@@ -7,6 +7,8 @@ import re
 import textwrap
 import time
 from botocore.exceptions import ClientError
+from dateutil.parser import parse
+
 
 # Set up logging
 logging.basicConfig(
@@ -105,6 +107,51 @@ def fallback_find_payment_terms(bucket_name: str, object_name: str) -> Optional[
         logging.error(f"An error occurred during fallback processing: {e}")
         return None
 
+def standardize_date(date_str: str) -> str:
+    """
+    Parse various date formats and standardize to 'DD Month YYYY'.
+
+    Args:
+        date_str (str): The date string to parse and format.
+
+    Returns:
+        str: The formatted date string in 'DD Month YYYY' format, or the original
+             string if parsing fails.
+    """
+    if not date_str or not isinstance(date_str, str):
+        return date_str
+
+    try:
+        
+        processed_str = date_str
+
+        # Define German months to handle special cases like "märz"
+        german_months = {
+            'januar': '01', 'februar': '02', 'märz': '03', 'april': '04',
+            'mai': '05', 'juni': '06', 'juli': '07', 'august': '08',
+            'september': '09', 'oktober': '10', 'november': '11', 'dezember': '12'
+        }
+
+        # process the string to replace German month names with numbers
+        for month_name, month_num in german_months.items():
+            if month_name in processed_str.lower():
+                # Use regex for case insensitive replacement
+                processed_str = re.sub(month_name, month_num, processed_str, flags=re.IGNORECASE)
+                break
+        
+        # Consistently assume day first for all ambiguous dates.
+        date_obj = parse(processed_str, dayfirst=True)
+        
+        # Use Day Month Year format.
+        return date_obj.strftime('%d %B %Y')
+
+    except ImportError:
+        print("\nERROR: The 'python-dateutil' library is required for advanced date parsing.")
+        print("Please install it by running: pip install python-dateutil\n")
+        return date_str
+    except (ValueError, TypeError):
+        # If the date format unrecognizable, return the original string
+        return date_str
 
 def _parse_float(value_str: Optional[str]) -> Optional[float]:
     """
@@ -268,9 +315,9 @@ def parse_extracted_data(response: Optional[Dict[str, Any]]) -> List[Dict[str, A
         extracted_data["Invoice Number"] = summary_fields.get(
             "INVOICE_RECEIPT_ID", "N/A"
         )
-        extracted_data["Invoice Date"] = summary_fields.get(
-            "INVOICE_RECEIPT_DATE", "N/A"
-        )
+        raw_date = summary_fields.get("INVOICE_RECEIPT_DATE", "N/A")
+        extracted_data["Invoice Date"] = standardize_date(raw_date)
+        
         extracted_data["Invoice Total"] = summary_fields.get("TOTAL", "N/A")
 
         payment_terms_value = summary_fields.get("PAYMENT_TERMS") or summary_fields.get(
