@@ -359,7 +359,7 @@ def parse_extracted_data(response: Optional[Dict[str, Any]]) -> List[Dict[str, A
                 if is_service_invoice:
                     hours = hours_str or quantity_str
                     line_item_details["Hours"] = hours
-                    line_item_details["Rate"] = rate_str
+                    line_item_details["Rate"] = rate_str or unit_price_str
 
                 elif quantity_str:
                     line_item_details["Quantity"] = quantity_str
